@@ -9,8 +9,9 @@ import os
 # import audioop
 # import wave
 # import io
+from twilio.request_validator import RequestValidator
 
-from fastapi import FastAPI, WebSocket, Request, Response
+from fastapi import FastAPI, WebSocket, Request, Response, HTTPException
 from fastapi.responses import PlainTextResponse
 import uvicorn
 
@@ -19,6 +20,10 @@ load_dotenv()
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Configure Twilio request validator
+auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
+requestValidator = RequestValidator(auth_token)
 
 app = FastAPI()
 
@@ -68,6 +73,15 @@ async def voice_webhook(request: Request):
     Twilio voice webhook endpoint
     """
     form_data = await request.form()
+    signature = request.headers.get("X-Twilio-Signature", "")
+    url = str(request.url)
+    
+    isValidRequest = requestValidator.validate(url, form_data, signature)
+    
+    if not isValidRequest:
+        logger.error("Invalid Twilio request signature")
+        return HTTPException(status_code=403, detail={"error": "Invalid signature"})
+    
     call_sid = form_data.get("CallSid")
     
     logger.info(f"Incoming call: {call_sid}")

@@ -8,6 +8,8 @@ import random
 from typing import Dict, Any
 from vad import initialize_vad_model
 import logging
+from fastapi import WebSocket
+import numpy as np
 
 load_dotenv()
 
@@ -21,6 +23,40 @@ class VoiceAgent:
         except Exception as e:
             self.logger.error(f"Failed to load Silero VAD model. Error: {e}")
             raise RuntimeError("Failed to initialize VAD model") from e            
+    
+    def initialize_call(self, call_sid: str, websocket: WebSocket) -> None:
+        self.active_calls[call_sid] = {
+        "websocket": websocket,
+        "stream_sid": None,
+        "is_speaking": False,
+        "speech_buffer": b"", # Buffers the complete user utterance (µ-law 8kHz)
+        "vad_audio_buffer": np.array([], dtype=np.int16), # Buffer VAD audio
+        "silence_frames": 0, # Counts consecutive silent frames
+        "resampler_state": None, # Store the state for audioop.ratecv,
+        "messages": [
+            {
+                "role": "system", 
+                "content": os.environ.get("SALES_AGENT_SYSTEM_PROMPT", "You are a helpful sales agent.")
+            },
+        ]  # Store messages for the call
+    }
+        
+    def add_message(self, call_sid: str, role: str, content: str) -> None:
+        """
+        Add a message to the call's message history.
+        
+        Args:
+            call_sid: Unique identifier for the call
+            role: Role of the message sender (e.g., "user", "assistant")
+            content: Content of the message
+        """
+        if call_sid in self.active_calls:
+            self.active_calls[call_sid]["messages"].append({
+                "role": role,
+                "content": content
+            })
+        else:
+            self.logger.warning(f"Call SID {call_sid} not found in active calls.")
     
     def convert_ulaw_to_wav(self, recordings_dir: str, ulaw_data: bytes, sample_rate: int = 8000) -> str:
         """
@@ -139,16 +175,20 @@ class VoiceAgent:
             
             # Convert to text
             transcription = await self.sarvam_client.speech_to_text(wav_file_path)
-                        
+            
+            self.add_message(call_sid, "user", transcription)
+
             # Get LLM response
-            llm_response = await self.sarvam_client.get_llm_response(transcription)
+            llm_response = await self.sarvam_client.get_llm_response(self.active_calls[call_sid]["messages"])
+            
+            self.add_message(call_sid, "assistant", llm_response)
                                 
             # Convert to speech
             response_audio = await self.sarvam_client.text_to_speech(llm_response)
-                                        
+
             # Convert response audio to μ-law format for Twilio
             ulaw_audio = self.convert_wav_to_ulaw(response_audio)                        
-                                        
+
             return ulaw_audio
             
         except Exception as e:

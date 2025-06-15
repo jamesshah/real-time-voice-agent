@@ -4,8 +4,20 @@ import logging
 from typing import Optional
 from sarvamai import SarvamAI
 import os
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
+
+load_dotenv()
+
+# model configurations
+TTS_MODEL = os.environ.get("TTS_MODEL", "bulbul:v2")
+TTS_SPEAKER = os.environ.get("TTS_SPEAKER", "anushka")
+STT_MODEL = os.environ.get("STT_MODEL", "saarika:v2")
+LLM_MODEL = os.environ.get("LLM_MODEL", "sarvam-m")
+SOURCE_LANGUAGE_CODE = os.environ.get("SOURCE_LANGUAGE_CODE", "gu-IN")
+TRANSLATE_TARGET_LANGUAGE_CODE = os.environ.get("TRANSLATE_TARGET_LANGUAGE_CODE", "en-IN")
+TRANSLATE_MODEL= os.environ.get("TRANSLATE_MODEL", "mayura:v1")
 
 class SarvamClient:
     """
@@ -16,7 +28,7 @@ class SarvamClient:
     def __init__(self, api_key: str):
         self.client = SarvamAI(api_subscription_key=api_key)
     
-    async def get_llm_response(self, message: str, model: str = "sarvam-m") -> Optional[str]:
+    async def get_llm_response(self, messages: list[str], model: str = LLM_MODEL) -> Optional[str]:
         """
         Get response from Sarvam AI LLM
         
@@ -28,11 +40,6 @@ class SarvamClient:
             Response text or None if failed
         """
         try:            
-            messages = [
-                {"role": "system", "content": "You are a sales agent for a real estate company called '23 degree north' located in Ahmedabad city of India. You will receive housing inquiry related messages from the users. Your job is to answer them patiently and with respect. Take their preferences and then imagine that you have data regarding real estate listings in Ahmedabad and answer accordingly."},
-                {"role": "user", "content": message}
-            ]
-            
             response = self.client.chat.completions(
                 messages=messages
             )
@@ -49,8 +56,8 @@ class SarvamClient:
     async def speech_to_text(
         self, 
         wav_file_path: str, 
-        language_code: str = "gu-IN",
-        model: str = "saarika:v2"
+        language_code: str = SOURCE_LANGUAGE_CODE,
+        model: str = STT_MODEL
     ) -> Optional[str]:
         """
         Convert speech to text using Sarvam AI ASR
@@ -83,9 +90,9 @@ class SarvamClient:
     async def text_to_speech(
         self, 
         text: str, 
-        target_language_code: str = "gu-IN",
-        speaker: str = "anushka",
-        model: str = "bulbul:v2"
+        target_language_code: str = SOURCE_LANGUAGE_CODE,
+        speaker: str = TTS_SPEAKER,
+        model: str = TTS_MODEL
     ) -> Optional[bytes]:
         """
         Convert text to speech using Sarvam AI TTS
@@ -125,9 +132,9 @@ class SarvamClient:
     async def translate_text(
         self,
         text: str,
-        source_language_code: str = "hi-IN",
-        target_language_code: str = "en-IN",
-        model: str = "mayura:v1"
+        source_language_code: str = SOURCE_LANGUAGE_CODE,
+        target_language_code: str = TRANSLATE_TARGET_LANGUAGE_CODE,
+        model: str = TRANSLATE_MODEL
     ) -> Optional[str]:
         """
         Translate text using Sarvam AI translation

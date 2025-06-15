@@ -2,6 +2,11 @@
 
 This contains various versions of real-time voice agent attempts using various different technologies and frameworks
 
+v2: 06-14-2025
+
+-   In this version, we add silero-vad package for Voice Activity Detection
+-   Everytime we receive audio data from Twilio, we pass it to VAD model, and it checks if the speech is identified or not, until user stops talking, we buffer the data (unlike a fixed window size buffer in v1)
+
 v1: 06-13-2025
 
 -   This is the first version using Twilio and SarvamAI for telephony conversation

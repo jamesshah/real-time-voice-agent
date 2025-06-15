@@ -2,6 +2,12 @@
 
 This contains various versions of real-time voice agent attempts using various different technologies and frameworks
 
+v3: 06-15-2025
+
+-   In this version, we add memory to our voice agent. It stores entire conversation and responds accordingly.
+-   We also add a default greeting from our voice agent that makes the call even more natural.
+-   We make voice agent configurations .env file driven, so that we can change the model for any of our component easily
+
 v2: 06-14-2025
 
 -   In this version, we add silero-vad package for Voice Activity Detection

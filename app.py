@@ -3,7 +3,6 @@ import base64
 import json
 import logging
 from typing import Dict, Any
-import numpy as np
 from dotenv import load_dotenv
 import os
 import sys
@@ -52,13 +51,15 @@ async def voice_webhook(request: Request):
     
     logger.info(f"Incoming call: {call_sid}")
     
+    greeting_url = f"""https://{request.headers.get("host")}/static/greeting"""
+    
     # TwiML response to start bidirectional stream
     twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say>Hello! I'm connecting you to our voice agent.</Say>
+    <Play>{greeting_url}</Play>
     <Connect>
         <Stream url="wss://{request.headers.get('host')}/websocket/stream/{call_sid}" />
-    </Connect>
+    </Connect>    
 </Response>"""
     
     return Response(content=twiml_response, media_type="application/xml")
@@ -202,6 +203,25 @@ async def send_audio_to_twilio(websocket: WebSocket, audio_data: bytes, call_dat
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+@app.get("/static/greeting")
+def get_greeting():
+    """
+    Serve a static greeting audio file
+    """
+        
+    TTS_SPEAKER = os.environ.get("TTS_SPEAKER", "anushka")
+    greeting_file_path = f""".greeting_audios/{TTS_SPEAKER}.wav"""
+    
+    if not os.path.exists(greeting_file_path):
+        return HTTPException(content="Greeting file not found", status_code=404)
+    
+    with open(greeting_file_path, "rb") as f:
+        audio_data = f.read()
+    
+    return Response(content=audio_data, media_type="audio/wav", headers={
+        "Cache-Control": "no-cache" # Twilio requires this. Should be changed if caching is needed
+    })
 
 if __name__ == "__main__":
     uvicorn.run(

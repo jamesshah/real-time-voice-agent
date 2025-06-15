@@ -3,17 +3,14 @@ import base64
 import json
 import logging
 from typing import Dict, Any
-from sarvam import SarvamClient
+import numpy as np
 from dotenv import load_dotenv
 import os
-# import audioop
-# import wave
-# import io
-from twilio.request_validator import RequestValidator
-
-from fastapi import FastAPI, WebSocket, Request, Response, HTTPException
-from fastapi.responses import PlainTextResponse
+import sys
+from fastapi import FastAPI, WebSocket, Request, Response, WebSocketDisconnect
 import uvicorn
+from vad import  process_audio_with_vad
+from agent import VoiceAgent
 
 load_dotenv()
 
@@ -21,51 +18,14 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configure Twilio request validator
-auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
-requestValidator = RequestValidator(auth_token)
-
 app = FastAPI()
 
-class VoiceAgent:
-    def __init__(self):
-        self.sarvam_client = SarvamClient(api_key=os.environ.get("SARVAM_API_KEY"))
-        self.active_calls: Dict[str, Dict[str, Any]] = {}
-        
-    async def process_audio_chunk(self, call_sid: str, audio_data: bytes) -> bytes:
-        """
-        Process incoming audio chunk and return response audio
-        This is where you'll integrate:
-        1. Sarvam AI Speech-to-Text
-        2. LLM processing
-        3. Sarvam AI Text-to-Speech
-        """
-        try:
-            # Convert to text
-            transcription = await self.sarvam_client.speech_to_text_from_ulaw(audio_data)
-            
-            if transcription:
-                print(f"Transcription for call {call_sid}: {transcription}")
-                # Get LLM response
-                llm_response = await self.sarvam_client.get_llm_response(transcription)
-                
-                print(f"LLM response for call {call_sid}: {llm_response}")
-                
-                if llm_response is not None:
-                    # Convert to speech
-                    response_audio = await self.sarvam_client.text_to_speech_for_twilio(llm_response)
-                    return response_audio
-                
-                return b'\xff' * len(audio_data)
-            
-            return b'\xff' * len(audio_data)  # Silence if no transcription
-            
-        except Exception as e:
-            logger.error(f"Error processing audio: {e}")
-            return b'\xff' * len(audio_data)
-
-# Initialize voice agent
-voice_agent = VoiceAgent()
+try:
+    # Initialize voice agent
+    voice_agent = VoiceAgent(logger)
+except Exception as e:
+    logger.error(f"Failed to initialize VoiceAgent: {e}")
+    sys.exit(1)
 
 @app.post("/voice")
 async def voice_webhook(request: Request):
@@ -73,15 +33,6 @@ async def voice_webhook(request: Request):
     Twilio voice webhook endpoint
     """
     form_data = await request.form()
-    signature = request.headers.get("X-Twilio-Signature", "")
-    url = str(request.url)
-    
-    isValidRequest = requestValidator.validate(url, form_data, signature)
-    
-    if not isValidRequest:
-        logger.error("Invalid Twilio request signature")
-        return HTTPException(status_code=403, detail={"error": "Invalid signature"})
-    
     call_sid = form_data.get("CallSid")
     
     logger.info(f"Incoming call: {call_sid}")
@@ -109,8 +60,11 @@ async def websocket_endpoint(websocket: WebSocket, call_sid: str):
     voice_agent.active_calls[call_sid] = {
         "websocket": websocket,
         "stream_sid": None,
-        "audio_buffer": b"",
-        "sequence_number": 0
+        "is_speaking": False,
+        "speech_buffer": b"", # Buffers the complete user utterance (µ-law 8kHz)
+        "vad_audio_buffer": np.array([], dtype=np.int16), # Buffer VAD audio
+        "silence_frames": 0, # Counts consecutive silent frames
+        "resampler_state": None # Store the state for audioop.ratecv
     }
     
     try:
@@ -131,60 +85,87 @@ async def websocket_endpoint(websocket: WebSocket, call_sid: str):
                 
             elif event_type == "media":
                 # Handle incoming audio
-                await handle_media_event(call_sid, data)
+                if voice_agent.vad_model:
+                    await handle_media_event(call_sid, data)
+                else:
+                    logger.error("Silero VAD model is not loaded. Cannot process media events.")
                 
             elif event_type == "stop":
                 logger.info(f"Stream stopped for call: {call_sid}")
                 break
                 
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected by client for call {call_sid}.")
+        
     except Exception as e:
         logger.error(f"WebSocket error for call {call_sid}: {e}")
     finally:
         # Cleanup
         if call_sid in voice_agent.active_calls:
             del voice_agent.active_calls[call_sid]
+        
+        # Optional: Delete the recordings directory for this call
+        # recordings_dir = voice_agent.create_recordings_directory(call_sid)
+        # if os.path.exists(recordings_dir):
+        #     try:
+        #         os.rmdir(recordings_dir)  # Remove the directory if empty
+        #     except OSError as e:
+        #         logger.error(f"Error removing recordings directory {recordings_dir}: {e}")
+        
         logger.info(f"WebSocket connection closed for call: {call_sid}")
 
 async def handle_media_event(call_sid: str, data: Dict[str, Any]):
     """
-    Handle incoming media (audio) from Twilio
+    Handles incoming audio from Twilio, performs VAD, and triggers processing.
     """
     try:
         call_data = voice_agent.active_calls.get(call_sid)
         if not call_data:
             return
-            
-        websocket = call_data["websocket"]
-        
-        # Get audio payload (base64 encoded μ-law)
+
         payload = data.get("media", {}).get("payload", "")
         if not payload:
             return
-            
-        # Decode audio data
-        audio_data = base64.b64decode(payload)
-        
-        # Add to buffer
-        call_data["audio_buffer"] += audio_data
-        
-        # Process audio chunks (e.g., every 1 second of audio)
-        # μ-law 8kHz = 8000 bytes per second
-        chunk_size = 8000 * 10 # 10 seconds of audio
-        
-        if len(call_data["audio_buffer"]) >= chunk_size:
-            # Extract chunk for processing
-            chunk = call_data["audio_buffer"][:chunk_size]
-            call_data["audio_buffer"] = call_data["audio_buffer"][chunk_size:]
-            
-            # Process the audio chunk (STT -> LLM -> TTS)
-            response_audio = await voice_agent.process_audio_chunk(call_sid, chunk)
-            
-            # Send response audio back to Twilio
-            if response_audio:
-                await send_audio_to_twilio(websocket, response_audio, call_data)
-                
+
+        # Decode Twilio's µ-law audio from base64
+        audio_mulaw = base64.b64decode(payload)
+
+        # Process audio with VAD
+        vad_result = process_audio_with_vad(
+            voice_agent.vad_model, audio_mulaw, call_data
+        )
+
+        if vad_result["end_of_speech"]:
+            # Get the complete utterance
+            full_utterance = vad_result["speech_buffer"]
+
+            # Reset state for the next utterance
+            call_data["speech_buffer"] = b""
+            call_data["is_speaking"] = False
+            call_data["silence_frames"] = 0
+
+            # Process the audio in the background
+            if full_utterance:
+                asyncio.create_task(process_and_respond(call_sid, full_utterance, call_data))
+
     except Exception as e:
         logger.error(f"Error handling media event for call {call_sid}: {e}")
+
+async def process_and_respond(call_sid: str, full_utterance: bytes, call_data: Dict[str, Any]):
+
+    try:
+        response_audio = await voice_agent.process_audio_chunk(call_sid, full_utterance)
+        
+        # Send response audio back to Twilio
+        if response_audio and call_data.get("websocket"):
+            await send_audio_to_twilio(
+                call_data["websocket"],
+                response_audio,
+                call_data
+            )
+            
+    except Exception as e:
+        logger.error(f"Error in process_and_respond for call {call_sid}: {e}")
 
 async def send_audio_to_twilio(websocket: WebSocket, audio_data: bytes, call_data: Dict[str, Any]):
     """

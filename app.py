@@ -211,7 +211,7 @@ def get_greeting():
     """
         
     TTS_SPEAKER = os.environ.get("TTS_SPEAKER", "anushka")
-    greeting_file_path = f""".greeting_audios/{TTS_SPEAKER}.wav"""
+    greeting_file_path = f"""./greeting_audios/{TTS_SPEAKER}.wav"""
     
     if not os.path.exists(greeting_file_path):
         return HTTPException(content="Greeting file not found", status_code=404)

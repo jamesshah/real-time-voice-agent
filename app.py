@@ -57,15 +57,7 @@ async def websocket_endpoint(websocket: WebSocket, call_sid: str):
     logger.info(f"WebSocket connection established for call: {call_sid}")
     
     # Initialize call data
-    voice_agent.active_calls[call_sid] = {
-        "websocket": websocket,
-        "stream_sid": None,
-        "is_speaking": False,
-        "speech_buffer": b"", # Buffers the complete user utterance (µ-law 8kHz)
-        "vad_audio_buffer": np.array([], dtype=np.int16), # Buffer VAD audio
-        "silence_frames": 0, # Counts consecutive silent frames
-        "resampler_state": None # Store the state for audioop.ratecv
-    }
+    voice_agent.initialize_call(call_sid, websocket)
     
     try:
         while True:

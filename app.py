@@ -108,17 +108,9 @@ async def websocket_endpoint(websocket: WebSocket, call_sid: str):
     except Exception as e:
         logger.error(f"WebSocket error for call {call_sid}: {e}")
     finally:
-        # Cleanup
-        if call_sid in voice_agent.active_calls:
-            del voice_agent.active_calls[call_sid]
         
-        # Optional: Delete the recordings directory for this call
-        # recordings_dir = voice_agent.create_recordings_directory(call_sid)
-        # if os.path.exists(recordings_dir):
-        #     try:
-        #         os.rmdir(recordings_dir)  # Remove the directory if empty
-        #     except OSError as e:
-        #         logger.error(f"Error removing recordings directory {recordings_dir}: {e}")
+        # Clean up call data
+        voice_agent.cleanup_call(call_sid)
         
         logger.info(f"WebSocket connection closed for call: {call_sid}")
 

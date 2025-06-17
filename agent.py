@@ -10,6 +10,7 @@ from vad import initialize_vad_model
 import logging
 from fastapi import WebSocket
 import numpy as np
+import json
 
 load_dotenv()
 
@@ -40,6 +41,46 @@ class VoiceAgent:
             },
         ]  # Store messages for the call
     }
+        
+    def cleanup_call(self, call_sid: str) -> None:
+        """
+        Store conversation transcript and Cleanup resources for a call when it ends.
+        
+        Args:
+            call_sid: Unique identifier for the call
+        """
+        
+        if call_sid in self.active_calls:
+            
+            try:
+            
+                # Exclude system prompt
+                messages_to_store = self.active_calls[call_sid]["messages"][1:]
+                
+                recordings_dir = self.create_recordings_directory(call_sid)
+                
+                # Store messages to a file
+                messages_file = os.path.join(recordings_dir, "messages.json")
+                
+                with open(messages_file, "w") as f:
+                    json.dump(messages_to_store, f, indent=2, ensure_ascii=False)
+                
+                del self.active_calls[call_sid]
+                self.logger.info(f"Call {call_sid} cleaned up successfully.")
+                
+            except Exception as e:
+                self.logger.error(f"Error cleaning up call {call_sid}: {e}")
+                
+        else:
+            self.logger.warning(f"Call SID {call_sid} not found in active calls.")
+            
+        # Optional: Delete the recordings directory for this call
+        # recordings_dir = self.create_recordings_directory(call_sid)
+        # if os.path.exists(recordings_dir):
+        #     try:
+        #         os.rmdir(recordings_dir)  # Remove the directory if empty
+        #     except OSError as e:
+        #         logger.error(f"Error removing recordings directory {recordings_dir}: {e}")
         
     def add_message(self, call_sid: str, role: str, content: str) -> None:
         """

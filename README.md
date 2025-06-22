@@ -43,6 +43,11 @@ This project implements a real-time voice agent using Twilio and SarvamAI, enabl
     ```bash
     python src/app.py
     ```
+7. Run ngrok to expose your local server to the internet (for Twilio to reach your local server):
+    ```bash
+    ngrok http 8000
+    ```
+8. Configure your Twilio phone number to use the ngrok URL for incoming calls, pointing to the `/voice` endpoint of your application.
 
 ## Usage
 

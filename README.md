@@ -1,6 +1,14 @@
 # Real Time Voice Agent
 
+![GitHub Release](https://img.shields.io/github/v/release/jamesshah/real-time-voice-agent)
+
+![GitHub License](https://img.shields.io/github/license/jamesshah/real-time-voice-agent)
+
 This project implements a real-time voice agent using Twilio and SarvamAI, enabling telephony conversations with features like speech-to-text, text-to-speech, and large language model integration.
+
+# Design
+
+![Design Diagram](design.png)
 
 ## Features
 

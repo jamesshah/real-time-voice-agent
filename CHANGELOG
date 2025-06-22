@@ -1,0 +1,30 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [3.0.0] - 2025-06-15
+
+### Added
+
+-   Memory for the voice agent to store entire conversations and respond accordingly.
+-   Default greeting from the voice agent for a more natural call experience.
+-   `.env` file-driven configurations to easily change models for components.
+
+## [2.0.0] - 2025-06-14
+
+### Added
+
+-   Integration of the `silero-vad` package for Voice Activity Detection (VAD).
+-   Dynamic buffering of audio data from Twilio until the user stops talking, replacing the fixed window size buffer from v1.
+
+## [1.0.0] - 2025-06-13
+
+### Added
+
+-   Initial version using Twilio and SarvamAI for telephony conversations.
+-   Twilio's Bi-directional media stream on WebSocket for raw audio processing through the pipeline:
+    -   Speech-To-Text (STT)
+    -   Large Language Model (LLM)
+    -   Text-To-Speech (TTS)
+-   Streaming audio responses back to Twilio.
+-   Fixed chunk size audio processing (e.g., every 10 seconds or based on `window_size`).

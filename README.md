@@ -1,28 +1,51 @@
-# Real-Time Voice Agent For Inbound Sales Inquires for a Real Estate company in Indian Languages
+# Real Time Voice Agent
 
-This contains various versions of real-time voice agent attempts using various different technologies and frameworks
+This project implements a real-time voice agent using Twilio and SarvamAI, enabling telephony conversations with features like speech-to-text, text-to-speech, and large language model integration.
 
-v3: 06-15-2025
+## Features
 
--   In this version, we add memory to our voice agent. It stores entire conversation and responds accordingly.
--   We also add a default greeting from our voice agent that makes the call even more natural.
--   We make voice agent configurations .env file driven, so that we can change the model for any of our component easily
+-   Real-time audio processing with Twilio's Bi-directional media stream.
+-   Speech-to-Text (STT) for converting spoken language into text.
+-   Large Language Model (LLM) for understanding and generating responses.
+-   Text-to-Speech (TTS) for converting text responses back into spoken language.
+-   Voice Activity Detection (VAD) to dynamically buffer audio data until the user stops talking.
+-   Memory for storing entire conversations and responding accordingly.
+-   Default greeting from the voice agent for a more natural call experience.
+-   Configurable through a `.env` file for easy model changes.
 
-v2: 06-14-2025
+## Requirements
 
--   In this version, we add silero-vad package for Voice Activity Detection
--   Everytime we receive audio data from Twilio, we pass it to VAD model, and it checks if the speech is identified or not, until user stops talking, we buffer the data (unlike a fixed window size buffer in v1)
+-   Python 3.8 or higher
+-   Twilio account with access to the Programmable Voice API
+-   SarvamAI account with access to the required models
+-   Required Python packages (see `requirements.txt`)
 
-v1: 06-13-2025
+## Installation
 
--   This is the first version using Twilio and SarvamAI for telephony conversation
--   In this, we use Twilio's Bi-directional media stream on websocket, to get raw audio and then process that through the pipeline of Speech-To-Text (STT), LLM (Large Language Model), and Text-To-Speech (TTS) to get the audio response and finally streaming it back to twilio.
--   In this version, we use a fixed chunk size to process the audio (i.e., every 10 sec or whatever the window_size is - we collect audio for that duration and process it)
--   To run it locally, follow below steps
--   Create Twilio Account. Get a Phone Number.
--   Get SarvamAI API Key and put it in .env
--   Clone repo and install dependencies using `pip3 install -r requirements.txt`
--   Start server using `python3 app.py`
--   Run ngrok for port 8000 using `ngrok http 8000`
--   Use the `https` url in the Twilio portal for the voice webhook
--   Call on your Twilio phone number and test
+1. Clone the repository:
+    ```bash
+    git clone
+    ```
+2. Navigate to the project directory:
+    ```bash
+    cd real-time-voice-agent
+    ```
+3. Install the required packages:
+    ```bash
+     pip install -r requirements.txt
+    ```
+4. Create a `.env` file in the project root using `.env.example` and configure your Twilio and SarvamAI credentials:
+    ```bash
+    cp .env.example .env
+    ```
+5. Update the `.env` file with your Twilio and SarvamAI credentials, and any other configurations as needed.
+6. Run the application:
+    ```bash
+    python src/app.py
+    ```
+
+## Usage
+
+-   Make a call to the Twilio number configured in your account.
+-   The voice agent will greet you and start processing your speech in real-time.
+-   Speak naturally, and the agent will respond based on the conversation context.
